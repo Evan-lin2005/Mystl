@@ -569,6 +569,183 @@ template<class Key,
         }
 };
 
+template <typename Key, typename Value>
+class myMap {
+private:
+    static constexpr bool RED   = true;
+    static constexpr bool BLACK = false;
+
+    struct RBNode {
+        Key    key;
+        Value  value;
+        bool   color;          // true = RED, false = BLACK
+        RBNode *left, *right, *parent;
+        RBNode(const Key& k, const Value& v,
+               bool c = RED, RBNode* p = nullptr)
+            : key(k), value(v), color(c),
+              left(nullptr), right(nullptr), parent(p) {}
+    };
+
+    RBNode* root;
+    int     cnt;
+
+    /* ---------- 低階工具 ---------- */
+    static bool isRed(RBNode* n) { return n && n->color == RED; }
+
+    static RBNode* rotateLeft (RBNode* h) {
+        RBNode* x = h->right;
+        h->right  = x->left;
+        if (x->left) x->left->parent = h;
+        x->left   = h;
+
+        x->color  = h->color;
+        h->color  = RED;
+
+        x->parent = h->parent;
+        h->parent = x;
+        return x;
+    }
+    static RBNode* rotateRight(RBNode* h) {
+        RBNode* x = h->left;
+        h->left   = x->right;
+        if (x->right) x->right->parent = h;
+        x->right  = h;
+
+        x->color  = h->color;
+        h->color  = RED;
+
+        x->parent = h->parent;
+        h->parent = x;
+        return x;
+    }
+    static void flipColors(RBNode* h) {
+        h->color = !h->color;
+        if (h->left)  h->left ->color = !h->left ->color;
+        if (h->right) h->right->color = !h->right->color;
+    }
+
+    static RBNode* moveRedLeft(RBNode* h) {
+        flipColors(h);
+        if (isRed(h->right->left)) {
+            h->right = rotateRight(h->right);
+            h        = rotateLeft(h);
+            flipColors(h);
+        }
+        return h;
+    }
+    static RBNode* moveRedRight(RBNode* h) {
+        flipColors(h);
+        if (isRed(h->left->left)) {
+            h = rotateRight(h);
+            flipColors(h);
+        }
+        return h;
+    }
+
+    static RBNode* fixUp(RBNode* h) {
+        if (isRed(h->right) && !isRed(h->left))
+            h = rotateLeft(h);
+        if (isRed(h->left) && isRed(h->left->left))
+            h = rotateRight(h);
+        if (isRed(h->left) && isRed(h->right))
+            flipColors(h);
+        return h;
+    }
+
+    /* ---------- 基本操作 ---------- */
+    RBNode* insert(RBNode* h,const Key& k,const Value& v,RBNode* p){
+        if (!h) { ++cnt; return new RBNode(k,v,RED,p); }
+
+        if      (k < h->key) h->left  = insert(h->left ,k,v,h);
+        else if (k > h->key) h->right = insert(h->right,k,v,h);
+        else                 h->value = v;
+
+        if (isRed(h->right) && !isRed(h->left))       h = rotateLeft (h);
+        if (isRed(h->left)  &&  isRed(h->left->left)) h = rotateRight(h);
+        if (isRed(h->left)  &&  isRed(h->right))      flipColors(h);
+        return h;
+    }
+
+    static RBNode* minimum(RBNode* h) { while (h->left) h=h->left; return h; }
+
+    RBNode* eraseMin(RBNode* h){
+        if (!h->left) { delete h; --cnt; return nullptr; }
+        if (!isRed(h->left) && !isRed(h->left->left))
+            h = moveRedLeft(h);
+        h->left = eraseMin(h->left);
+        return fixUp(h);
+    }
+
+    RBNode* erase(RBNode* h,const Key& k){
+        if (k < h->key) {
+            if (!isRed(h->left) && !isRed(h->left->left))
+                h = moveRedLeft(h);
+            h->left = erase(h->left,k);
+        } else {
+            if (isRed(h->left))
+                h = rotateRight(h);
+            if (k == h->key && !h->right) {
+                delete h; --cnt; return nullptr;
+            }
+            if (!isRed(h->right) && !isRed(h->right->left))
+                h = moveRedRight(h);
+            if (k == h->key) {
+                RBNode* x = minimum(h->right);
+                h->key   = x->key;
+                h->value = x->value;
+                h->right = eraseMin(h->right);
+            } else {
+                h->right = erase(h->right,k);
+            }
+        }
+        return fixUp(h);
+    }
+
+    static void clearTree(RBNode* n){
+        if (!n) return;
+        clearTree(n->left); clearTree(n->right); delete n;
+    }
+
+    static RBNode* findNode(RBNode* n,const Key& k){
+        while (n){
+            if (k < n->key) n = n->left;
+            else if (k > n->key) n = n->right;
+            else return n;
+        }
+        return nullptr;
+    }
+
+public:
+    myMap(): root(nullptr), cnt(0) {}
+    ~myMap(){ clear(); }
+
+    void insert(const Key& k,const Value& v){
+        root = insert(root,k,v,nullptr);
+        root->color = BLACK;
+    }
+    void erase(const Key& k){
+        if (!findNode(root,k)) return;
+        root = erase(root,k);
+        if (root) root->color = BLACK;
+    }
+
+    Value* find(const Key& k) const{
+        RBNode* n = findNode(root,k);
+        return n ? &n->value : nullptr;
+    }
+    Value& operator[](const Key& k){
+        RBNode* n = findNode(root,k);
+        if (!n){ insert(k,Value{}); n = findNode(root,k); }
+        return n->value;
+    }
+
+    int  size() const { return cnt; }
+    bool empty()const { return cnt==0; }
+
+    void clear(){
+        clearTree(root); root=nullptr; cnt=0;
+    }
+};
 
 
 
